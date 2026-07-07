@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cert Utility — Config Builder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 2rem 2.5rem;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #58a6ff;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.82rem;
+      color: #8b949e;
+      margin-bottom: 1.75rem;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 1.1rem;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    input {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e1e4e8;
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    input:focus { border-color: #58a6ff; }
+    input::placeholder { color: #484f58; }
+
+    .required::after {
+      content: ' *';
+      color: #f85149;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #21262d;
+      margin: 1.5rem 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      border-radius: 6px;
+      padding: 0.5rem 1.1rem;
+      border: 1px solid transparent;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    .btn-primary {
+      background: #238636;
+      border-color: #2ea043;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border-color: #30363d;
+      color: #c9d1d9;
+    }
+
+    .hint {
+      margin-top: 1.25rem;
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.78rem;
+      color: #8b949e;
+      line-height: 1.6;
+      display: none;
+    }
+
+    .hint.visible { display: block; }
+
+    .hint code {
+      background: #0d1117;
+      border-radius: 4px;
+      padding: 0.1rem 0.35rem;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      color: #79c0ff;
+      font-size: 0.77rem;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 10px;
+      background: #21262d;
+      color: #8b949e;
+      vertical-align: middle;
+      margin-left: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Cert Utility <span class="tag">Config Builder</span></h1>
+    <p class="subtitle">Fill in the fields below, then download your <code>config.json</code>.<br>
+      Drop it into the <code>config/</code> folder and run <code>Invoke-CertTool.ps1</code>.</p>
+
+    <form id="configForm" novalidate>
+
+      <div class="field">
+        <label class="required" for="domain">Domain</label>
+        <input id="domain" type="text" placeholder="mail.google.com" required />
+      </div>
+
+      <div class="field">
+        <label class="required" for="organization">Organization</label>
+        <input id="organization" type="text" placeholder="GOOGLE LLC" required />
+      </div>
+
+      <div class="field">
+        <label for="country">Country Code</label>
+        <input id="country" type="text" maxlength="2" placeholder="US" value="US" />
+      </div>
+
+      <div class="field">
+        <label for="state">State / County</label>
+        <input id="state" type="text" placeholder="California" value="California" />
+      </div>
+
+      <div class="field">
+        <label for="locality">City / Locality</label>
+        <input id="locality" type="text" placeholder="Mountain View" value="Mountain View" />
+      </div>
+
+      <div class="field">
+        <label for="outputDir">Output Directory</label>
+        <input id="outputDir" type="text" placeholder="C:\Certificates" value="C:\Certificates" />
+      </div>
+
+      <hr />
+
+      <div class="actions">
+        <button type="submit" class="btn-primary">Download config.json</button>
+        <button type="button" class="btn-secondary" onclick="resetForm()">Reset</button>
+      </div>
+
+      <div class="hint" id="hint">
+        Config downloaded. Next steps:<br>
+        1. Move <code>config.json</code> into the <code>cert-utility/config/</code> folder.<br>
+        2. Run: <code>.\Invoke-CertTool.ps1 -ConfigPath .\config\config.json</code>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('configForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const get = id => document.getElementById(id).value.trim();
+
+      const domain = get('domain');
+      const organization = get('organization');
+
+      if (!domain || !organization) {
+        alert('Domain and Organization are required.');
+        return;
+      }
+
+      const config = {
+        domain:       domain,
+        country:      get('country')   || 'US',
+        state:        get('state')     || 'California',
+        locality:     get('locality')  || 'Mountain View',
+        organization: organization,
+        outputDir:    get('outputDir') || 'C:\\Certificates'
+      };
+
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'config.json';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      document.getElementById('hint').classList.add('visible');
+    });
+
+    function resetForm() {
+      document.getElementById('domain').value       = '';
+      document.getElementById('organization').value = '';
+      document.getElementById('country').value      = 'US';
+      document.getElementById('state').value        = 'California';
+      document.getElementById('locality').value     = 'Mountain View';
+      document.getElementById('outputDir').value    = 'C:\\Certificates';
+      document.getElementById('hint').classList.remove('visible');
+    }
+  </script>
+</body>
+</html>

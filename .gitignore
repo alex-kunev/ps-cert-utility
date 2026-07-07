@@ -1,0 +1,6 @@
+# Generated CSR and INF files
+output/
+
+# User-specific configs (keep the default template)
+config/*.config.json
+!config/default.config.json

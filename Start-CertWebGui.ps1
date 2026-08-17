@@ -50,7 +50,7 @@ function Get-NormalizedConfig {
     $organization = [string]$Payload.organization
 
     if ([string]::IsNullOrWhiteSpace($domain) -or [string]::IsNullOrWhiteSpace($organization)) {
-        throw "Domain and Organization are required."
+        throw [System.ArgumentException]::new("Domain and Organization are required.")
     }
 
     [pscustomobject]@{
@@ -96,13 +96,23 @@ try {
                         break
                     }
 
-                    $body = Get-RequestBody -Request $request
-                    $payload = $body | ConvertFrom-Json
-                    $config = Get-NormalizedConfig -Payload $payload
-                    $result = & "$PSScriptRoot\src\New-CertRequest.ps1" -Config $config -PassThru
+                    try {
+                        $body = Get-RequestBody -Request $request
+                        $payload = $body | ConvertFrom-Json
+                        $config = Get-NormalizedConfig -Payload $payload
+                    } catch {
+                        Write-JsonResponse -Context $context -StatusCode 400 -Message $_.Exception.Message
+                        break
+                    }
 
-                    $csrBytes = [System.IO.File]::ReadAllBytes($result.CsrPath)
-                    $fileName = [System.IO.Path]::GetFileName($result.CsrPath)
+                    try {
+                        $result = & "$PSScriptRoot\src\New-CertRequest.ps1" -Config $config -PassThru
+                        $csrBytes = [System.IO.File]::ReadAllBytes($result.CsrPath)
+                        $fileName = [System.IO.Path]::GetFileName($result.CsrPath)
+                    } catch {
+                        Write-JsonResponse -Context $context -StatusCode 500 -Message "Failed to generate the CSR."
+                        break
+                    }
 
                     $response.StatusCode = 200
                     $response.ContentType = "application/pkcs10"
@@ -116,7 +126,7 @@ try {
                 }
             }
         } catch {
-            Write-JsonResponse -Context $context -StatusCode 400 -Message $_.Exception.Message
+            Write-JsonResponse -Context $context -StatusCode 500 -Message "Unexpected server error."
         }
     }
 } finally {

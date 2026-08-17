@@ -43,7 +43,7 @@ Menu options: **[1]** Generate CSR · **[2]** View config · **[3]** Edit config
 Launch the browser-based CSR builder. It posts the certificate details to a local PowerShell host, which generates the CSR and returns it straight back to your browser as a download.
 
 ```powershell
-cd C:\Repos\cert-utility
+cd path\to\cert-utility
 .\Start-CertWebGui.ps1
 ```
 

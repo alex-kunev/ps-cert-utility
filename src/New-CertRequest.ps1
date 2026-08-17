@@ -5,7 +5,9 @@
 #>
 Param (
     [Parameter(Mandatory = $true)]
-    [object]$Config
+    [object]$Config,
+
+    [switch]$PassThru
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,11 +66,20 @@ try {
     certreq -new $infPath $csrPath
     Write-Host ""
     Write-Host "  CSR generated at: $csrPath" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "  Contents:" -ForegroundColor Cyan
-    Get-Content -Path $csrPath
-    Write-Host ""
+    if (-not $PassThru) {
+        Write-Host ""
+        Write-Host "  Contents:" -ForegroundColor Cyan
+        Get-Content -Path $csrPath
+        Write-Host ""
+    }
     Write-Host "  Private key is stored in the Windows Certificate Store." -ForegroundColor DarkGray
+
+    if ($PassThru) {
+        [pscustomobject]@{
+            InfPath = $infPath
+            CsrPath = $csrPath
+        }
+    }
 } catch {
     Write-Error "  Failed to generate CSR: $_"
 }

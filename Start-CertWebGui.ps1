@@ -23,13 +23,16 @@ function Write-JsonResponse {
         [Parameter(Mandatory = $true)][string]$Message
     )
 
-    $payload = @{ message = $Message } | ConvertTo-Json
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
-    $Context.Response.StatusCode = $StatusCode
-    $Context.Response.ContentType = "application/json; charset=utf-8"
-    $Context.Response.ContentLength64 = $bytes.Length
-    $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
-    $Context.Response.Close()
+    try {
+        $payload = @{ message = $Message } | ConvertTo-Json
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
+        $Context.Response.StatusCode = $StatusCode
+        $Context.Response.ContentType = "application/json; charset=utf-8"
+        $Context.Response.ContentLength64 = $bytes.Length
+        $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+        $Context.Response.Close()
+    } catch {
+    }
 }
 
 function Get-RequestBody {
@@ -70,6 +73,7 @@ function Get-NormalizedConfig {
 
 $listener = [System.Net.HttpListener]::new()
 $prefix = "http://localhost:$Port/"
+$csrfToken = [guid]::NewGuid().ToString("N")
 $listener.Prefixes.Add($prefix)
 $listener.Start()
 
@@ -87,7 +91,7 @@ try {
         try {
             switch ($request.Url.AbsolutePath) {
                 "/" {
-                    $html = Get-Content -Path $indexPath -Raw
+                    $html = (Get-Content -Path $indexPath -Raw).Replace("__CSRF_TOKEN__", $csrfToken)
                     $bytes = [System.Text.Encoding]::UTF8.GetBytes($html)
                     $response.StatusCode = 200
                     $response.ContentType = "text/html; charset=utf-8"
@@ -104,6 +108,7 @@ try {
                     $origin = $request.Headers["Origin"]
                     $referer = $request.Headers["Referer"]
                     $contentType = [string]$request.ContentType
+                    $requestToken = [string]$request.Headers["X-CSRF-Token"]
 
                     if (
                         (![string]::IsNullOrWhiteSpace($origin) -and $origin -ne $url) -or
@@ -115,6 +120,11 @@ try {
 
                     if (!$contentType.StartsWith("application/json", [System.StringComparison]::OrdinalIgnoreCase)) {
                         Write-JsonResponse -Context $context -StatusCode 415 -Message "Content-Type must be application/json."
+                        break
+                    }
+
+                    if ($requestToken -ne $csrfToken) {
+                        Write-JsonResponse -Context $context -StatusCode 403 -Message "Invalid request token."
                         break
                     }
 

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="__CSRF_TOKEN__" />
   <title>Cert Utility — CSR Builder</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -225,9 +226,13 @@
       }
 
       try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         const response = await fetch('/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+          },
           body: JSON.stringify(config)
         });
 

@@ -103,12 +103,18 @@ try {
 
                     $origin = $request.Headers["Origin"]
                     $referer = $request.Headers["Referer"]
+                    $contentType = [string]$request.ContentType
 
                     if (
                         (![string]::IsNullOrWhiteSpace($origin) -and $origin -ne $url) -or
                         (![string]::IsNullOrWhiteSpace($referer) -and !($referer.StartsWith("$url/") -or $referer -eq $url))
                     ) {
                         Write-JsonResponse -Context $context -StatusCode 403 -Message "Forbidden origin."
+                        break
+                    }
+
+                    if (!$contentType.StartsWith("application/json", [System.StringComparison]::OrdinalIgnoreCase)) {
+                        Write-JsonResponse -Context $context -StatusCode 415 -Message "Content-Type must be application/json."
                         break
                     }
 

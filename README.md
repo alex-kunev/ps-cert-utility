@@ -40,14 +40,14 @@ Menu options: **[1]** Generate CSR · **[2]** View config · **[3]** Edit config
 
 ### Option 3 — Web GUI
 
-Open the browser-based config builder to fill in certificate details and download a ready-to-use config file, then pass it to either option above.
+Launch the browser-based CSR builder. It posts the certificate details to a local PowerShell host, which generates the CSR and returns it straight back to your browser as a download.
 
 ```powershell
-# Open in your default browser
-Start-Process .\web\index.html
+cd C:\Repos\cert-utility
+.\Start-CertWebGui.ps1
 ```
 
-Or simply open `web\index.html` directly in any browser — no server required.
+This also writes the matching `.inf` file to `outputDir`, and the private key remains in the Windows Certificate Store.
 
 ---
 

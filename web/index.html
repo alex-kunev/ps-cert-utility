@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cert Utility — Config Builder</title>
+  <title>Cert Utility — CSR Builder</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -146,9 +146,9 @@
 </head>
 <body>
   <div class="card">
-    <h1>Cert Utility <span class="tag">Config Builder</span></h1>
-    <p class="subtitle">Fill in the fields below, then download your <code>config.json</code>.<br>
-      Drop it into the <code>config/</code> folder and run <code>Invoke-CertTool.ps1</code>.</p>
+    <h1>Cert Utility <span class="tag">CSR Builder</span></h1>
+    <p class="subtitle">Fill in the fields below, then let PowerShell generate and download your <code>.csr</code>.<br>
+      Launch this page with <code>.\Start-CertWebGui.ps1</code>.</p>
 
     <form id="configForm" novalidate>
 
@@ -185,20 +185,19 @@
       <hr />
 
       <div class="actions">
-        <button type="submit" class="btn-primary">Download config.json</button>
+        <button type="submit" class="btn-primary">Generate and download CSR</button>
         <button type="button" class="btn-secondary" onclick="resetForm()">Reset</button>
       </div>
 
       <div class="hint" id="hint">
-        Config downloaded. Next steps:<br>
-        1. Move <code>config.json</code> into the <code>cert-utility/config/</code> folder.<br>
-        2. Run: <code>.\Invoke-CertTool.ps1 -ConfigPath .\config\config.json</code>
+        CSR downloaded. The matching <code>.inf</code> file was written to your output directory,<br>
+        and the private key remains in the Windows Certificate Store.
       </div>
     </form>
   </div>
 
   <script>
-    document.getElementById('configForm').addEventListener('submit', function (e) {
+    document.getElementById('configForm').addEventListener('submit', async function (e) {
       e.preventDefault();
 
       const get = id => document.getElementById(id).value.trim();
@@ -220,15 +219,44 @@
         outputDir:    get('outputDir') || 'C:\\Certificates'
       };
 
-      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = 'config.json';
-      a.click();
-      URL.revokeObjectURL(url);
+      if (window.location.protocol === 'file:') {
+        alert('Start this page through .\\Start-CertWebGui.ps1 so PowerShell can generate the CSR.');
+        return;
+      }
 
-      document.getElementById('hint').classList.add('visible');
+      try {
+        const response = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+
+        if (!response.ok) {
+          let message = 'Failed to generate the CSR.';
+
+          try {
+            const error = await response.json();
+            message = error.message || message;
+          } catch (_) {}
+
+          throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/i);
+        const fileName = match ? match[1] : `${domain}.csr`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        document.getElementById('hint').classList.add('visible');
+      } catch (error) {
+        alert(error.message);
+      }
     });
 
     function resetForm() {

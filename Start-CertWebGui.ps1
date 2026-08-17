@@ -48,14 +48,19 @@ function Get-NormalizedConfig {
 
     $domain = [string]$Payload.domain
     $organization = [string]$Payload.organization
+    $country = if ([string]::IsNullOrWhiteSpace([string]$Payload.country)) { "US" } else { ([string]$Payload.country).Trim().ToUpper() }
 
     if ([string]::IsNullOrWhiteSpace($domain) -or [string]::IsNullOrWhiteSpace($organization)) {
         throw [System.ArgumentException]::new("Domain and Organization are required.")
     }
 
+    if ($country -notmatch '^[A-Z]{2}$') {
+        throw [System.ArgumentException]::new("Country must be a 2-letter code.")
+    }
+
     [pscustomobject]@{
         domain       = $domain.Trim()
-        country      = if ([string]::IsNullOrWhiteSpace([string]$Payload.country)) { "US" } else { ([string]$Payload.country).Trim().ToUpper() }
+        country      = $country
         state        = if ([string]::IsNullOrWhiteSpace([string]$Payload.state)) { "California" } else { ([string]$Payload.state).Trim() }
         locality     = if ([string]::IsNullOrWhiteSpace([string]$Payload.locality)) { "Mountain View" } else { ([string]$Payload.locality).Trim() }
         organization = $organization.Trim()
@@ -96,6 +101,17 @@ try {
                         break
                     }
 
+                    $origin = $request.Headers["Origin"]
+                    $referer = $request.Headers["Referer"]
+
+                    if (
+                        (![string]::IsNullOrWhiteSpace($origin) -and $origin -ne $url) -or
+                        (![string]::IsNullOrWhiteSpace($referer) -and !($referer.StartsWith("$url/") -or $referer -eq $url))
+                    ) {
+                        Write-JsonResponse -Context $context -StatusCode 403 -Message "Forbidden origin."
+                        break
+                    }
+
                     try {
                         $body = Get-RequestBody -Request $request
                         $payload = $body | ConvertFrom-Json
@@ -110,7 +126,8 @@ try {
                         $csrBytes = [System.IO.File]::ReadAllBytes($result.CsrPath)
                         $fileName = [System.IO.Path]::GetFileName($result.CsrPath)
                     } catch {
-                        Write-JsonResponse -Context $context -StatusCode 500 -Message "Failed to generate the CSR."
+                        Write-Warning "CSR generation failed: $($_.Exception.Message)"
+                        Write-JsonResponse -Context $context -StatusCode 500 -Message "Failed to generate the CSR: $($_.Exception.Message)"
                         break
                     }
 

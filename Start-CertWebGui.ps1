@@ -99,6 +99,7 @@ try {
         $context = $listener.GetContext()
         $request = $context.Request
         $response = $context.Response
+        $responseHandled = $false
 
         try {
             switch ($request.Url.AbsolutePath) {
@@ -109,10 +110,12 @@ try {
                     $response.ContentType = "text/html; charset=utf-8"
                     $response.ContentLength64 = $bytes.Length
                     $response.OutputStream.Write($bytes, 0, $bytes.Length)
+                    $responseHandled = $true
                     $response.Close()
                 }
                 "/generate" {
                     if ($request.HttpMethod -ne "POST") {
+                        $responseHandled = $true
                         Write-JsonResponse -Context $context -StatusCode 405 -Message "Method not allowed."
                         break
                     }
@@ -121,21 +124,28 @@ try {
                     $referer = $request.Headers["Referer"]
                     $contentType = [string]$request.ContentType
                     $requestToken = [string]$request.Headers["X-CSRF-Token"]
-                    $hasValidOrigin = ![string]::IsNullOrWhiteSpace($origin) -and $origin -eq $url
-                    $hasValidReferer = ![string]::IsNullOrWhiteSpace($referer) -and ($referer.StartsWith("$url/") -or $referer -eq $url)
 
-                    if (!($hasValidOrigin -or $hasValidReferer)) {
+                    if ($requestToken -ne $csrfToken) {
+                        $responseHandled = $true
+                        Write-JsonResponse -Context $context -StatusCode 403 -Message "Invalid request token."
+                        break
+                    }
+
+                    if (![string]::IsNullOrWhiteSpace($origin) -and $origin -ne $url) {
+                        $responseHandled = $true
+                        Write-JsonResponse -Context $context -StatusCode 403 -Message "Forbidden origin."
+                        break
+                    }
+
+                    if (![string]::IsNullOrWhiteSpace($referer) -and !($referer.StartsWith("$url/") -or $referer -eq $url)) {
+                        $responseHandled = $true
                         Write-JsonResponse -Context $context -StatusCode 403 -Message "Forbidden origin."
                         break
                     }
 
                     if (!$contentType.StartsWith("application/json", [System.StringComparison]::OrdinalIgnoreCase)) {
+                        $responseHandled = $true
                         Write-JsonResponse -Context $context -StatusCode 415 -Message "Content-Type must be application/json."
-                        break
-                    }
-
-                    if ($requestToken -ne $csrfToken) {
-                        Write-JsonResponse -Context $context -StatusCode 403 -Message "Invalid request token."
                         break
                     }
 
@@ -144,6 +154,7 @@ try {
                         $payload = $body | ConvertFrom-Json
                         $config = Get-NormalizedConfig -Payload $payload
                     } catch {
+                        $responseHandled = $true
                         Write-JsonResponse -Context $context -StatusCode 400 -Message $_.Exception.Message
                         break
                     }
@@ -154,6 +165,7 @@ try {
                         $fileName = [System.IO.Path]::GetFileName($result.CsrPath)
                     } catch {
                         Write-Warning "CSR generation failed: $($_.Exception.Message)"
+                        $responseHandled = $true
                         Write-JsonResponse -Context $context -StatusCode 500 -Message "Failed to generate the CSR: $($_.Exception.Message)"
                         break
                     }
@@ -163,14 +175,18 @@ try {
                     $response.AddHeader("Content-Disposition", "attachment; filename=`"$fileName`"")
                     $response.ContentLength64 = $csrBytes.Length
                     $response.OutputStream.Write($csrBytes, 0, $csrBytes.Length)
+                    $responseHandled = $true
                     $response.Close()
                 }
                 default {
+                    $responseHandled = $true
                     Write-JsonResponse -Context $context -StatusCode 404 -Message "Not found."
                 }
             }
         } catch {
-            Write-JsonResponse -Context $context -StatusCode 500 -Message "Unexpected server error."
+            if (-not $responseHandled) {
+                Write-JsonResponse -Context $context -StatusCode 500 -Message "Unexpected server error."
+            }
         }
     }
 } finally {

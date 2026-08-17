@@ -32,6 +32,7 @@ function Write-JsonResponse {
         $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
         $Context.Response.Close()
     } catch {
+        Write-Verbose "Failed to write JSON response: $($_.Exception.Message)"
     }
 }
 
@@ -52,6 +53,7 @@ function Get-NormalizedConfig {
     $domain = [string]$Payload.domain
     $organization = [string]$Payload.organization
     $country = if ([string]::IsNullOrWhiteSpace([string]$Payload.country)) { "US" } else { ([string]$Payload.country).Trim().ToUpper() }
+    $outputDir = if ([string]::IsNullOrWhiteSpace([string]$Payload.outputDir)) { "C:\Certificates" } else { ([string]$Payload.outputDir).Trim() }
 
     if ([string]::IsNullOrWhiteSpace($domain) -or [string]::IsNullOrWhiteSpace($organization)) {
         throw [System.ArgumentException]::new("Domain and Organization are required.")
@@ -61,13 +63,23 @@ function Get-NormalizedConfig {
         throw [System.ArgumentException]::new("Country must be a 2-letter code.")
     }
 
+    try {
+        $outputDir = [System.IO.Path]::GetFullPath($outputDir)
+    } catch {
+        throw [System.ArgumentException]::new("Output Directory must be a valid local path.")
+    }
+
+    if ($outputDir -notmatch '^[A-Za-z]:\\') {
+        throw [System.ArgumentException]::new("Output Directory must be a local absolute path like C:\Certificates.")
+    }
+
     [pscustomobject]@{
         domain       = $domain.Trim()
         country      = $country
         state        = if ([string]::IsNullOrWhiteSpace([string]$Payload.state)) { "California" } else { ([string]$Payload.state).Trim() }
         locality     = if ([string]::IsNullOrWhiteSpace([string]$Payload.locality)) { "Mountain View" } else { ([string]$Payload.locality).Trim() }
         organization = $organization.Trim()
-        outputDir    = if ([string]::IsNullOrWhiteSpace([string]$Payload.outputDir)) { "C:\Certificates" } else { ([string]$Payload.outputDir).Trim() }
+        outputDir    = $outputDir
     }
 }
 
@@ -109,11 +121,10 @@ try {
                     $referer = $request.Headers["Referer"]
                     $contentType = [string]$request.ContentType
                     $requestToken = [string]$request.Headers["X-CSRF-Token"]
+                    $hasValidOrigin = ![string]::IsNullOrWhiteSpace($origin) -and $origin -eq $url
+                    $hasValidReferer = ![string]::IsNullOrWhiteSpace($referer) -and ($referer.StartsWith("$url/") -or $referer -eq $url)
 
-                    if (
-                        (![string]::IsNullOrWhiteSpace($origin) -and $origin -ne $url) -or
-                        (![string]::IsNullOrWhiteSpace($referer) -and !($referer.StartsWith("$url/") -or $referer -eq $url))
-                    ) {
+                    if (!($hasValidOrigin -or $hasValidReferer)) {
                         Write-JsonResponse -Context $context -StatusCode 403 -Message "Forbidden origin."
                         break
                     }
